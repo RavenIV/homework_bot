@@ -84,8 +84,11 @@ def check_response(response):
 
 def parse_status(homework):
     """Извлекает из данных о домашней работе её статус."""
-    homework_name = homework['homework_name']
-    verdict = HOMEWORK_VERDICTS[(homework['status'])]
+    homework_name = homework.get('homework_name')
+    status = homework.get('status')
+    if homework_name is None or status is None or status not in HOMEWORK_VERDICTS:
+        raise KeyError
+    verdict = HOMEWORK_VERDICTS[status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
