@@ -1,11 +1,19 @@
-...
+import logging
+import time
+import os
+
+import requests
+import telegram
+from dotenv import load_dotenv
+
+import exceptions
 
 load_dotenv()
 
 
-PRACTICUM_TOKEN = ...
-TELEGRAM_TOKEN = ...
-TELEGRAM_CHAT_ID = ...
+PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
@@ -19,16 +27,44 @@ HOMEWORK_VERDICTS = {
 }
 
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s: %(levelname)s %(message)s',
+    filename='main.log',
+    filemode='w',
+)
+
+
 def check_tokens():
-    ...
+    """Проверка наличия обязательных переменных окружения."""
+    for variable in (
+        PRACTICUM_TOKEN,
+        TELEGRAM_TOKEN,
+        TELEGRAM_CHAT_ID
+    ):
+        if variable is None:
+            logging.critical(
+                f'Отсутствует обязательная переменная окружения: {variable}. '
+                f'Программа принудительно остановлена.'
+            )
+            raise exceptions.TokensNotFoundError
 
 
 def send_message(bot, message):
-    ...
+    """Отправляет сообщение в Telegram чат."""
+    return bot.send_message(TELEGRAM_CHAT_ID, message)
 
 
 def get_api_answer(timestamp):
-    ...
+    """Отправляет запрос к API и возвращает данные в json-формате."""
+    try:
+        response = requests.get(ENDPOINT, headers=HEADERS, params=timestamp)
+    except Exception as error:
+        logging.error(f'Ошибка при запросе к API: {error}.')
+    if response.status_code != 200:
+        logging.error(f'Сбой в программе. Код ответа при запросе к API: {response.status_code}')
+        raise exceptions.RequestError
+    return response.json()
 
 
 def check_response(response):
@@ -36,8 +72,9 @@ def check_response(response):
 
 
 def parse_status(homework):
-    ...
-
+    """Извлекает из данных о домашней работе её статус."""
+    homework_name = homework['homework_name']
+    verdict = HOMEWORK_VERDICTS[(homework['status'])]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
