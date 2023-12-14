@@ -52,7 +52,8 @@ def check_tokens():
 
 def send_message(bot, message):
     """Отправляет сообщение в Telegram чат."""
-    return bot.send_message(TELEGRAM_CHAT_ID, message)
+    bot.send_message(TELEGRAM_CHAT_ID, message)
+    logging.debug(f'Бот отправил сообщение: "{message}"')
 
 
 def get_api_answer(timestamp):
@@ -68,7 +69,17 @@ def get_api_answer(timestamp):
 
 
 def check_response(response):
-    ...
+    """Проверка ответа API."""
+    if not isinstance(response, dict):
+        logging.error(f'Сбой в программе: ответ API является {type(response)}')
+        raise TypeError
+    if not response:
+        logging.error('Сбой в программе: ответ API ничего не содержит')
+        raise exceptions.InvalidResponseError
+    if 'homeworks' not in response:
+        raise KeyError
+    if not isinstance(response['homeworks'], list):
+        raise TypeError
 
 
 def parse_status(homework):
