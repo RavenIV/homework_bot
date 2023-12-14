@@ -1,10 +1,6 @@
-class PageNotFoundError(Exception):
-    pass
+class NotOkStatusResponse(Exception):
+    """Вызывается, если код ответа отличен от 200."""
 
-
-class RequestError(Exception):
-    pass
-
-
-class TokensNotFoundError(Exception):
-    pass
+    def __init__(self, message, info):
+        super().__init__(message)
+        self.info = info
