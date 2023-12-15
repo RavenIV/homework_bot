@@ -27,6 +27,11 @@ HOMEWORK_VERDICTS = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
+VERDICT_MESSAGE = (
+    'Изменился статус проверки работы "{name}". {verdict}'
+)
+ERROR_MESSAGE = 'Сбой в работе программы: {error}'
+
 
 def check_tokens():
     """Проверка наличия обязательных переменных окружения."""
@@ -88,9 +93,8 @@ def parse_status(homework):
     elif status not in HOMEWORK_VERDICTS:
         raise KeyError('Неожиданный статус домашней работы в ответе API')
     else:
-        return (
-            f'Изменился статус проверки работы "{homework_name}". '
-            f'{HOMEWORK_VERDICTS[status]}'
+        return VERDICT_MESSAGE.format(
+            name=homework_name, verdict=HOMEWORK_VERDICTS[status]
         )
 
 
@@ -112,32 +116,25 @@ def main():
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
 
-    statuses = set()
+    homework = {}
     message_error = ''
 
     while True:
         try:
             response = get_api_answer(timestamp)
+            timestamp = response.get('current_date', timestamp)
             check_response(response)
             homeworks = response['homeworks']
-            new_statuses = {
-                (homework['homework_name'], homework['status'])
-                for homework in homeworks
-            }
-            updates = new_statuses - statuses
-            if len(updates) > 0:
-                for update in updates:
-                    homework_name = update[0]
-                    for homework in homeworks:
-                        if homework['homework_name'] == homework_name:
-                            message = parse_status(homework)
-                            send_message(bot, message)
+            if len(homeworks) > 0:
+                last_homework = homeworks[0]
+                if set(last_homework.items()) != set(homework.items()):
+                    message = parse_status(last_homework)
+                    send_message(bot, message)
+                    homework = last_homework
             else:
                 logging.debug('В ответе API новые статусы не обнаружены.')
-            timestamp = response['current_date']
-
         except Exception as error:
-            new_message_error = f'Сбой в работе программы: {error}'
+            new_message_error = ERROR_MESSAGE.format(error=error)
             logging.error(new_message_error)
             if new_message_error != message_error:
                 send_message(bot, new_message_error)
