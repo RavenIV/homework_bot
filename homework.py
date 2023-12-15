@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import requests
 import telegram
 
-from exceptions import NotOkStatusResponse
+from exceptions import NotOkStatusResponseError
 
 
 load_dotenv()
@@ -26,20 +26,6 @@ HOMEWORK_VERDICTS = {
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s: [%(levelname)s] %(message)s'
-)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter(
-    '%(asctime)s: [%(levelname)s] %(message)s'
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 
 def check_tokens():
@@ -61,9 +47,9 @@ def send_message(bot, message):
     """Отправляет сообщение в Telegram чат."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logger.debug(f'Бот отправил сообщение: "{message}"')
+        logging.debug(f'Бот отправил сообщение: "{message}"')
     except telegram.error.TelegramError as error:
-        logger.error(f'Ошибка при отправлении сообщения в Telegram: {error}')
+        logging.error(f'Ошибка при отправлении сообщения в Telegram: {error}')
 
 
 def get_api_answer(timestamp):
@@ -73,13 +59,13 @@ def get_api_answer(timestamp):
             ENDPOINT, headers=HEADERS, params={'from_date': timestamp}
         )
         if response.status_code != 200:
-            raise NotOkStatusResponse('Ошибка при запросе к API', {
+            raise NotOkStatusResponseError('Ошибка при запросе к API', {
                 'response': response,
                 'status_code': response.status_code
             })
         return response.json()
     except requests.RequestException as error:
-        logger.error(f'Ошибка запроса к API: {error}.')
+        logging.error(f'Ошибка запроса к API: {error}.')
 
 
 def check_response(response):
@@ -110,6 +96,17 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format=(
+            '%(asctime)s [%(levelname)s] File "%(pathname)s", '
+            'function "%(funcName)s", line %(lineno)d: %(message)s'
+        ),
+        handlers=[
+            logging.StreamHandler(), logging.FileHandler(__file__ + '.log')
+        ]
+    )
+
     check_tokens()
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
@@ -141,7 +138,7 @@ def main():
 
         except Exception as error:
             new_message_error = f'Сбой в работе программы: {error}'
-            logger.error(new_message_error)
+            logging.error(new_message_error)
             if new_message_error != message_error:
                 send_message(bot, new_message_error)
                 message_error = new_message_error
