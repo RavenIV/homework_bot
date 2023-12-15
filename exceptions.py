@@ -5,6 +5,10 @@ class TokenNotFoundError(Exception):
 class NotOkStatusResponseError(Exception):
     """Вызывается, если код ответа отличен от 200."""
 
-    def __init__(self, message, info):
-        super().__init__(message)
-        self.info = info
+
+class BadRequestError(Exception):
+    """Вызывается при провале запроса к API."""
+
+
+class UnexpectedResponseError(Exception):
+    """Вызывается, если ответ API не соответствует ожидаемому."""
