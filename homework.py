@@ -1,13 +1,12 @@
 import logging
 import time
 import os
-import sys
 
 from dotenv import load_dotenv
 import requests
 import telegram
 
-from exceptions import NotOkStatusResponseError
+from exceptions import TokenNotFoundError, NotOkStatusResponseError
 
 
 load_dotenv()
@@ -16,6 +15,12 @@ load_dotenv()
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+
+TOKEN_VARIABLE_NAMES = (
+    'PRACTICUM_TOKEN',
+    'TELEGRAM_TOKEN',
+    'TELEGRAM_CHAT_ID'
+)
 
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
@@ -32,20 +37,18 @@ VERDICT_MESSAGE = (
 )
 ERROR_MESSAGE = 'Сбой в работе программы: {error}'
 
+logger = logging.getLogger(__name__)
+
 
 def check_tokens():
     """Проверка наличия обязательных переменных окружения."""
-    for variable, name in (
-        (PRACTICUM_TOKEN, 'PRACTICUM_TOKEN'),
-        (TELEGRAM_TOKEN, 'TELEGRAM_TOKEN'),
-        (TELEGRAM_CHAT_ID, 'TELEGRAM_CHAT_ID')
-    ):
-        if variable is None:
-            logging.critical(
-                f'Отсутствует обязательная переменная окружения: {name}. '
-                f'Программа принудительно остановлена.'
-            )
-            sys.exit()
+    tokens_unavailable = []
+    for name in TOKEN_VARIABLE_NAMES:
+        if globals()[name] is None:
+            logging.critical(f'Отсутствует переменная окружения: {name}.')
+            tokens_unavailable.append(name)
+    if len(tokens_unavailable) != 0:
+        raise TokenNotFoundError
 
 
 def send_message(bot, message):

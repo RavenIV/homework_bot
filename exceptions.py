@@ -1,3 +1,7 @@
+class TokenNotFoundError(Exception):
+    """Вызывается при отсутствии обязательных переменных окружения."""
+
+
 class NotOkStatusResponseError(Exception):
     """Вызывается, если код ответа отличен от 200."""
 
