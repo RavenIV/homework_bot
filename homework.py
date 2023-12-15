@@ -46,9 +46,9 @@ REQUEST_PARAMETERS = (
     'Параметры запроса: эндпоинт={0}, headers={1}, params={2}'
 )
 BAD_REQUEST_ERROR = 'Ошибка запроса к API. ' + REQUEST_PARAMETERS
-NOT_OK_STATUS_RESPONSE = ('Запрос к API вернул код ответа "{status}"' 
+NOT_OK_STATUS_RESPONSE = ('Запрос к API вернул код ответа "{status}"'
                           + REQUEST_PARAMETERS)
-UNEXPECTED_RESPONSE = ('Ответ API вернул ошибку: {name}. ' 
+UNEXPECTED_RESPONSE = ('Ответ API вернул ошибку: {name}. '
                        + REQUEST_PARAMETERS)
 RESPONSE_NOT_DICT = 'Ответ API не соответствует типу словаря: {}'
 HOMEWORKS_NOT_IN_RESPONSE = 'В ответе API нет ключа `homeworks`.'
