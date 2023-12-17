@@ -37,15 +37,17 @@ ERROR = 'Сбой в работе программы: {}'
 MISSED_TOKENS = 'Отсутствуют переменные окружения: {}.'
 MESSAGE_SENT_SUCCESSFULLY = 'Бот отправил сообщение: "{}"'
 SEND_MESSAGE_ERROR = 'Ошибка при отправлении в Telegram сообщения: "{}". {}'
-REQUEST_PARAMETERS = (
-    'Параметры запроса: эндпоинт={0}, headers={1}, params={2}'
+BAD_REQUEST_ERROR = (
+    'Ошибка запроса к API {error}. '
+    'Параметры запроса: эндпоинт={url}, headers={headers}, params={params}'
 )
-BAD_REQUEST_ERROR = 'Ошибка запроса к API {error}. {parameters}'
 NOT_OK_STATUS_RESPONSE = (
-    'Запрос к API вернул код ответа "{status}". {parameters}'
+    'Запрос к API вернул код ответа "{status}". '
+    'Параметры запроса: эндпоинт={url}, headers={headers}, params={params}'
 )
 RESPONSE_ERROR = (
-    'Ответ API вернул ошибку: {name}={error}. {parameters}'
+    'Ответ API вернул ошибку: {name}={error}. '
+    'Параметры запроса: эндпоинт={url}, headers={headers}, params={params}'
 )
 RESPONSE_NOT_DICT = 'Ответ API не соответствует типу словаря: {}'
 HOMEWORKS_NOT_IN_RESPONSE = 'В ответе API нет ключа `homeworks`.'
@@ -69,17 +71,16 @@ def check_tokens():
 def send_message(bot, message):
     """Отправляет сообщение в Telegram чат."""
     try:
-        bot.send_message(TELEGRAM_CHAT_ID, message)
+        sent_message = bot.send_message(TELEGRAM_CHAT_ID, message)
         logging.debug(MESSAGE_SENT_SUCCESSFULLY.format(message))
+        return sent_message
     except telegram.error.TelegramError as error:
         logging.exception(SEND_MESSAGE_ERROR.format(message, error))
+        return None
 
 
 def get_api_answer(timestamp):
     """Отправляет запрос к API и возвращает данные в json-формате."""
-    request_parameters = REQUEST_PARAMETERS.format(
-        ENDPOINT, HEADERS, {'from_date': timestamp}
-    )
     try:
         response = requests.get(
             ENDPOINT, headers=HEADERS, params={'from_date': timestamp}
@@ -88,14 +89,18 @@ def get_api_answer(timestamp):
         raise ConnectionError(
             BAD_REQUEST_ERROR.format(
                 error=error,
-                parameters=request_parameters
+                url=ENDPOINT,
+                headers=HEADERS,
+                params={'from_date': timestamp}
             )
         )
     if response.status_code != 200:
         raise NotOkStatusResponseError(
             NOT_OK_STATUS_RESPONSE.format(
                 status=response.status_code,
-                parameters=request_parameters
+                url=ENDPOINT,
+                headers=HEADERS,
+                params={'from_date': timestamp}
             )
         )
     response = response.json()
@@ -104,7 +109,9 @@ def get_api_answer(timestamp):
             raise ResponseError(RESPONSE_ERROR.format(
                 name=name,
                 error=response[name],
-                parameters=request_parameters
+                url=ENDPOINT,
+                headers=HEADERS,
+                params={'from_date': timestamp}
             ))
     return response
 
@@ -148,10 +155,10 @@ def main():
             homeworks = response['homeworks']
             if not homeworks:
                 logging.debug(NO_NEW_STATUSES)
-            else:
-                last_homework = homeworks[0]
-                if send_message(bot, parse_status(last_homework)) is not None:
-                    timestamp = response.get('current_date', timestamp)
+                continue
+            last_homework = homeworks[0]
+            if send_message(bot, parse_status(last_homework)) is not None:
+                timestamp = response.get('current_date', timestamp)
         except Exception as error:
             new_message_error = ERROR.format(error)
             logging.error(new_message_error)
@@ -159,8 +166,8 @@ def main():
                 bot, new_message_error
             ) is not None:
                 message_error = new_message_error
-
-        time.sleep(RETRY_PERIOD)
+        finally:
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
