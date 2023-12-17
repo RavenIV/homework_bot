@@ -6,13 +6,7 @@ from dotenv import load_dotenv
 import requests
 import telegram
 
-from exceptions import (
-    TokenNotFoundError,
-    NotOkStatusResponseError,
-    BadRequestError,
-    UnexpectedResponseError
-)
-
+from exceptions import NotOkStatusResponseError, UnexpectedResponseError
 
 load_dotenv()
 
@@ -21,7 +15,7 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-TOKEN_VARIABLE_NAMES = (
+TOKEN_NAMES = (
     'PRACTICUM_TOKEN',
     'TELEGRAM_TOKEN',
     'TELEGRAM_CHAT_ID'
@@ -41,11 +35,11 @@ VERDICT = ('Изменился статус проверки работы "{name
 ERROR = 'Сбой в работе программы: {}'
 MISSED_TOKENS = 'Отсутствуют переменные окружения: {}.'
 MESSAGE_SENT_SUCCESSFULLY = 'Бот отправил сообщение: "{}"'
-SEND_MESSAGE_ERROR = 'Ошибка при отправлении в Telegram сообщения: "{}"'
+SEND_MESSAGE_ERROR = 'Ошибка при отправлении в Telegram сообщения: "{}". {}'
 REQUEST_PARAMETERS = (
     'Параметры запроса: эндпоинт={0}, headers={1}, params={2}'
 )
-BAD_REQUEST_ERROR = 'Ошибка запроса к API. ' + REQUEST_PARAMETERS
+BAD_REQUEST_ERROR = 'Ошибка запроса к API {error}. ' + REQUEST_PARAMETERS
 NOT_OK_STATUS_RESPONSE = ('Запрос к API вернул код ответа "{status}"'
                           + REQUEST_PARAMETERS)
 UNEXPECTED_RESPONSE = ('Ответ API вернул ошибку: {name}. '
@@ -63,44 +57,44 @@ logger = logging.getLogger(__name__)
 
 def check_tokens():
     """Проверка наличия обязательных переменных окружения."""
-    missed_tokens = []
-    for name in TOKEN_VARIABLE_NAMES:
-        if globals()[name] is None:
-            missed_tokens.append(name)
-    if len(missed_tokens) != 0:
+    missed_tokens = [name for name in TOKEN_NAMES if globals()[name] is None]
+    if missed_tokens:
         logging.critical(MISSED_TOKENS.format(missed_tokens))
-        raise TokenNotFoundError
+        raise KeyError(MISSED_TOKENS.format(missed_tokens))
 
 
 def send_message(bot, message):
     """Отправляет сообщение в Telegram чат."""
     try:
-        bot.send_message(TELEGRAM_CHAT_ID, message)
+        sent_message = bot.send_message(TELEGRAM_CHAT_ID, message)
         logging.debug(MESSAGE_SENT_SUCCESSFULLY.format(message))
-    except telegram.error.TelegramError:
-        logging.exception(SEND_MESSAGE_ERROR.format(message))
+        return sent_message
+    except telegram.error.TelegramError as error:
+        logging.exception(SEND_MESSAGE_ERROR.format(message, error))
 
 
 def get_api_answer(timestamp):
     """Отправляет запрос к API и возвращает данные в json-формате."""
-    params = {'from_date': timestamp}
-    request_parameters = [ENDPOINT, HEADERS, params]
+    request_parameters = [ENDPOINT, HEADERS, {'from_date': timestamp}]
     try:
-        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-    except requests.RequestException:
-        raise BadRequestError(BAD_REQUEST_ERROR.format(*request_parameters))
-    else:
-        if response.status_code != 200:
-            raise NotOkStatusResponseError(NOT_OK_STATUS_RESPONSE.format(
-                *request_parameters, status=response.status_code
+        response = requests.get(
+            ENDPOINT, headers=HEADERS, params={'from_date': timestamp}
+        )
+    except requests.RequestException as error:
+        raise ConnectionError(
+            BAD_REQUEST_ERROR.format(*request_parameters, error=error)
+        )
+    if response.status_code != 200:
+        raise NotOkStatusResponseError(NOT_OK_STATUS_RESPONSE.format(
+            *request_parameters, status=response.status_code
+        ))
+    response = response.json()
+    for name in ('code', 'error'):
+        if name in response:
+            raise UnexpectedResponseError(UNEXPECTED_RESPONSE.format(
+                *request_parameters, name=response[name]
             ))
-        response = response.json()
-        for name in ('code', 'error'):
-            if name in response:
-                raise UnexpectedResponseError(UNEXPECTED_RESPONSE.format(
-                    *request_parameters, name=name
-                ))
-        return response
+    return response
 
 
 def check_response(response):
@@ -118,12 +112,11 @@ def parse_status(homework):
     for key in ('homework_name', 'status'):
         if key not in homework:
             raise KeyError(MISSED_HOMEWORK_KEYS.format(key))
-    homework_name = homework['homework_name']
     status = homework['status']
     if status not in HOMEWORK_VERDICTS:
         raise ValueError(UNEXPERCTED_HOMEWORK_STATUS.format(status))
     return VERDICT.format(
-        name=homework_name, verdict=HOMEWORK_VERDICTS[status]
+        name=homework['homework_name'], verdict=HOMEWORK_VERDICTS[status]
     )
 
 
@@ -134,34 +127,26 @@ def main():
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
 
-    homework = {}
     message_error = ''
 
     while True:
         try:
             response = get_api_answer(timestamp)
-            timestamp = response.get('current_date', timestamp)
             check_response(response)
             homeworks = response['homeworks']
-            if len(homeworks) > 0:
-                last_homework = homeworks[0]
-                if set(last_homework.items()) != set(homework.items()):
-                    message = parse_status(last_homework)
-                    send_message(bot, message)
-                    homework = last_homework
-            else:
+            if not homeworks:
                 logging.debug(NO_NEW_STATUSES)
+            else:
+                last_homework = homeworks[0]
+                sent_message = send_message(bot, parse_status(last_homework))
+                if sent_message is not None:
+                    timestamp = response.get('current_date', timestamp)
         except Exception as error:
             new_message_error = ERROR.format(error)
             logging.error(new_message_error)
             if new_message_error != message_error:
-                try:
-                    send_message(bot, new_message_error)
-                except telegram.error.TelegramError:
-                    logging.exception(SEND_MESSAGE_ERROR.format(
-                        new_message_error
-                    ))
-                else:
+                sent_message = send_message(bot, new_message_error)
+                if sent_message is not None:
                     message_error = new_message_error
 
         time.sleep(RETRY_PERIOD)
