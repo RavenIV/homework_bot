@@ -65,7 +65,7 @@ def check_tokens():
     missed_tokens = [name for name in TOKEN_NAMES if not globals()[name]]
     if missed_tokens:
         logging.critical(MISSED_TOKENS.format(missed_tokens))
-        raise NameError(MISSED_TOKENS.format(missed_tokens))
+        raise UnboundLocalError(MISSED_TOKENS.format(missed_tokens))
 
 
 def send_message(bot, message):
