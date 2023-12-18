@@ -9,8 +9,8 @@ import telegram
 
 from exceptions import NotOkStatusResponseError, ResponseError
 
-load_dotenv()
 
+load_dotenv()
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -81,37 +81,22 @@ def send_message(bot, message):
 
 def get_api_answer(timestamp):
     """Отправляет запрос к API и возвращает данные в json-формате."""
+    rq_pars = dict(
+        url=ENDPOINT, headers=HEADERS, params={'from_date': timestamp}
+    )
     try:
-        response = requests.get(
-            ENDPOINT, headers=HEADERS, params={'from_date': timestamp}
-        )
+        response = requests.get(**rq_pars)
     except requests.RequestException as error:
-        raise ConnectionError(
-            BAD_REQUEST_ERROR.format(
-                error=error,
-                url=ENDPOINT,
-                headers=HEADERS,
-                params={'from_date': timestamp}
-            )
-        )
+        raise ConnectionError(BAD_REQUEST_ERROR.format(error=error, **rq_pars))
     if response.status_code != 200:
-        raise NotOkStatusResponseError(
-            NOT_OK_STATUS_RESPONSE.format(
-                status=response.status_code,
-                url=ENDPOINT,
-                headers=HEADERS,
-                params={'from_date': timestamp}
-            )
-        )
+        raise NotOkStatusResponseError(NOT_OK_STATUS_RESPONSE.format(
+            status=response.status_code, **rq_pars
+        ))
     response = response.json()
     for name in ('code', 'error'):
         if name in response:
             raise ResponseError(RESPONSE_ERROR.format(
-                name=name,
-                error=response[name],
-                url=ENDPOINT,
-                headers=HEADERS,
-                params={'from_date': timestamp}
+                name=name, error=response[name], **rq_pars
             ))
     return response
 
